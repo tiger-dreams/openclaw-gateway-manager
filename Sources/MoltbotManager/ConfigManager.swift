@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import Network
 
 class ConfigManager: ObservableObject {
     @Published var config: MoltbotConfig?
@@ -16,7 +17,7 @@ class ConfigManager: ObservableObject {
             if let selectedPath = selectConfigPath() {
                 configPath = selectedPath
             } else {
-                configPath = "/Users/tiger/.moltbot/moltbot.json"
+                configPath = "\(NSHomeDirectory())/.openclaw/openclaw.json"
             }
         }
         loadConfig()
@@ -24,20 +25,26 @@ class ConfigManager: ObservableObject {
 
     private func findConfigPath() -> String? {
         // Check current directory
-        if FileManager.default.fileExists(atPath: "./moltbot.json") {
-            return "./moltbot.json"
+        if FileManager.default.fileExists(atPath: "./openclaw.json") {
+            return "./openclaw.json"
         }
 
-        // Check ~/moltbot
-        let homeMoltbot = "\(NSHomeDirectory())/moltbot/moltbot.json"
+        // Check ~/.openclaw
+        let homeOpenclaw = "\(NSHomeDirectory())/.openclaw/openclaw.json"
+        if FileManager.default.fileExists(atPath: homeOpenclaw) {
+            return homeOpenclaw
+        }
+
+        // Check ~/.moltbot
+        let homeMoltbot = "\(NSHomeDirectory())/.moltbot/openclaw.json"
         if FileManager.default.fileExists(atPath: homeMoltbot) {
             return homeMoltbot
         }
 
-        // Check ~/.moltbot
-        let homeDotMoltbot = "\(NSHomeDirectory())/.moltbot/moltbot.json"
-        if FileManager.default.fileExists(atPath: homeDotMoltbot) {
-            return homeDotMoltbot
+        // Check ~/.moltbot (legacy filename)
+        let homeMoltbotLegacy = "\(NSHomeDirectory())/.moltbot/moltbot.json"
+        if FileManager.default.fileExists(atPath: homeMoltbotLegacy) {
+            return homeMoltbotLegacy
         }
 
         return nil
@@ -49,7 +56,7 @@ class ConfigManager: ObservableObject {
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
-        panel.message = "Select your moltbot.json config file"
+        panel.message = "Select your openclaw.json config file"
         panel.title = "Choose Config File"
 
         if panel.runModal() == .OK, let url = panel.url {
@@ -66,7 +73,7 @@ class ConfigManager: ObservableObject {
             config = try decoder.decode(MoltbotConfig.self, from: data)
             errorMessage = nil
         } catch {
-            errorMessage = "Failed to load config from \(configPath)"
+            errorMessage = "Failed to load config from \(configPath)\nDetails: \(error.localizedDescription)\n\(error)"
             print(error)
         }
     }
@@ -87,30 +94,46 @@ class ConfigManager: ObservableObject {
     }
 
     func checkGatewayStatus() {
-        DispatchQueue.global(qos: .userInitiated).async {
-            let task = Process()
-            task.launchPath = "/bin/bash"
-            task.arguments = ["-c", "ps aux | grep -i 'moltbot-gateway' | grep -v grep | wc -l"]
+        guard let config = config else {
+            self.gatewayRunning = false
+            return
+        }
 
-            let pipe = Pipe()
-            task.standardOutput = pipe
-            task.launch()
-            task.waitUntilExit()
+        let host = NWEndpoint.Host("127.0.0.1")
+        let port = NWEndpoint.Port(integerLiteral: UInt16(config.gateway.port))
+        let connection = NWConnection(host: host, port: port, using: .tcp)
 
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "0"
-
-            DispatchQueue.main.async {
-                self.gatewayRunning = Int(output) ?? 0 > 0
+        connection.stateUpdateHandler = { state in
+            switch state {
+            case .ready:
+                DispatchQueue.main.async {
+                    self.gatewayRunning = true
+                    connection.cancel()
+                }
+            case .failed(_):
+                DispatchQueue.main.async {
+                    self.gatewayRunning = false
+                    connection.cancel()
+                }
+            case .waiting(let error):
+                // Waiting means it can't connect immediately (e.g. refused)
+                DispatchQueue.main.async {
+                   self.gatewayRunning = false
+                   connection.cancel()
+                }
+            default:
+                break
             }
         }
+        
+        connection.start(queue: .global())
     }
 
     func restartGateway() -> Bool {
         DispatchQueue.global(qos: .userInitiated).async {
             let task = Process()
             task.launchPath = "/bin/bash"
-            task.arguments = ["-c", "pkill -f 'moltbot-gateway' && sleep 1 && moltbot-gateway > /dev/null 2>&1 &"]
+            task.arguments = ["-c", "pkill -f 'openclaw gateway' && sleep 1 && openclaw gateway > /dev/null 2>&1 &"]
             task.launch()
             task.waitUntilExit()
 
@@ -122,10 +145,35 @@ class ConfigManager: ObservableObject {
         return true
     }
 
+    func resetSessions() -> Bool {
+        DispatchQueue.global(qos: .userInitiated).async {
+            let task = Process()
+            task.launchPath = "/bin/bash"
+            task.arguments = ["-c", "openclaw reset --scope full > /dev/null 2>&1"]
+            task.launch()
+            task.waitUntilExit()
+
+            if task.terminationStatus == 0 {
+                DispatchQueue.main.async {
+                    self.errorMessage = "Sessions reset successfully"
+                }
+            } else {
+                DispatchQueue.main.async {
+                    self.errorMessage = "Failed to reset sessions"
+                }
+            }
+        }
+
+        return true
+    }
+
     func getAvailableModels() -> [ModelDisplay] {
         guard let config = config else { return [] }
 
         var models: [ModelDisplay] = []
+
+        // ADded models tracking to prevent duplicates
+        var addedIds = Set<String>()
 
         // Add models from providers
         for (providerName, provider) in config.models.providers {
@@ -135,13 +183,15 @@ class ConfigManager: ObservableObject {
                 let isLocal = providerName == "ollama"
                 let isKnown = !isLocal
 
+                let id = "\(providerName)/\(model.id)"
                 models.append(ModelDisplay(
-                    id: "\(providerName)/\(model.id)",
+                    id: id,
                     displayName: displayName,
                     provider: providerDisplay,
                     isLocal: isLocal,
                     isKnown: isKnown
                 ))
+                addedIds.insert(id)
             }
         }
 
@@ -160,13 +210,18 @@ class ConfigManager: ObservableObject {
                     let isLocal = false
                     let isKnown = true
 
-                    models.append(ModelDisplay(
-                        id: aliasKey, // Use the alias key as ID
-                        displayName: displayName,
-                        provider: providerDisplay,
-                        isLocal: isLocal,
-                        isKnown: isKnown
-                    ))
+                    let id = aliasKey
+                    // SKIP if already added via providers
+                    if !addedIds.contains(id) {
+                        models.append(ModelDisplay(
+                            id: id,
+                            displayName: displayName,
+                            provider: providerDisplay,
+                            isLocal: isLocal,
+                            isKnown: isKnown
+                        ))
+                        addedIds.insert(id)
+                    }
                 }
             }
         }

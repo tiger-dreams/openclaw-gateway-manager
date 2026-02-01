@@ -89,7 +89,7 @@ struct MoltbotConfig: Codable {
                 var fallbacks: [String]
             }
             struct ModelAlias: Codable {
-                let alias: String
+                let alias: String?
             }
         }
     }

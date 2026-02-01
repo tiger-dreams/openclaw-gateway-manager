@@ -5,7 +5,7 @@ struct ContentView: View {
 
     var body: some View {
         VStack(spacing: 20) {
-            Text("Moltbot Manager")
+            Text("OpenClaw Manager")
                 .font(.system(size: 24, weight: .bold))
                 .padding(.top, 20)
 
@@ -71,7 +71,7 @@ struct GatewayStatusView: View {
             Text(running ? "Gateway Running" : "Gateway Stopped")
                 .font(.headline)
             Spacer()
-            Text("Port: \(port)")
+            Text("Port: \(port.formatted(.number.grouping(.never)))")
                 .foregroundColor(.secondary)
                 .font(.caption)
         }
@@ -85,13 +85,13 @@ struct ModelSelectorView: View {
     @ObservedObject var configManager: ConfigManager
     let availableModels: [ModelDisplay]
     @State private var selectedPrimary: String
-    @State private var selectedFallbacks: Set<String>
+    @State private var orderedFallbacks: [String]
 
     init(configManager: ConfigManager, availableModels: [ModelDisplay], primaryModel: String, fallbackModels: [String]) {
         self.configManager = configManager
         self.availableModels = availableModels
         _selectedPrimary = State(initialValue: primaryModel)
-        _selectedFallbacks = State(initialValue: Set(fallbackModels))
+        _orderedFallbacks = State(initialValue: fallbackModels)
     }
 
     var body: some View {
@@ -99,60 +99,104 @@ struct ModelSelectorView: View {
             Text("Model Configuration")
                 .font(.headline)
 
+            // Primary Model
             VStack(alignment: .leading, spacing: 5) {
                 Text("Primary Model")
                     .font(.caption)
                     .foregroundColor(.secondary)
-                Picker("", selection: $selectedPrimary) {
-                    ForEach(availableModels, id: \.id) { model in
-                        HStack {
-                            Image(systemName: model.isLocal ? "chip" : "cloud")
-                                .foregroundColor(model.isLocal ? .blue : .green)
-                            Text(model.displayName)
-                                .foregroundColor(model.isKnown ? .primary : .secondary)
-                        }
-                        .tag(model.id)
+                modelPicker(selection: $selectedPrimary)
+                    .onChange(of: selectedPrimary) { newValue in
+                        configManager.updatePrimaryModel(newValue)
                     }
-                }
-                .pickerStyle(.menu)
-                .onChange(of: selectedPrimary) { newValue in
-                    configManager.updatePrimaryModel(newValue)
-                }
             }
 
-            VStack(alignment: .leading, spacing: 5) {
-                Text("Fallback Models (select multiple)")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                List(availableModels, id: \.id, selection: $selectedFallbacks) { model in
-                    HStack {
-                        Image(systemName: selectedFallbacks.contains(model.id) ? "checkmark.circle.fill" : "circle")
-                            .foregroundColor(selectedFallbacks.contains(model.id) ? .green : .secondary)
-                        Image(systemName: model.isLocal ? "chip" : "cloud")
-                            .foregroundColor(model.isLocal ? .blue : .green)
-                            .frame(width: 16)
-                        Text(model.displayName)
-                            .foregroundColor(model.isKnown ? .primary : .secondary)
+            Divider()
+
+            // Fallback Models
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("Fallback Models (Ordered)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Button(action: {
+                        if let first = availableModels.first?.id {
+                            orderedFallbacks.append(first)
+                            saveFallbacks()
+                        }
+                    }) {
+                        Label("Add", systemImage: "plus")
+                            .font(.caption)
                     }
-                    .contentShape(Rectangle())
+                    .buttonStyle(.bordered)
                 }
-                .frame(height: 250)
-                .scrollContentBackground(.hidden)
-                .listStyle(.bordered)
-                .onChange(of: selectedFallbacks) { _ in
-                    configManager.updateFallbackModels(Array(selectedFallbacks).sorted())
+
+                ScrollView {
+                    VStack(spacing: 8) {
+                        ForEach(orderedFallbacks.indices, id: \.self) { index in
+                            HStack {
+                                Text("\(index + 1)st")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .frame(width: 25, alignment: .trailing)
+                                
+                                modelPicker(selection: $orderedFallbacks[index])
+                                    .onChange(of: orderedFallbacks[index]) { _ in
+                                        saveFallbacks()
+                                    }
+                                
+                                Button(action: {
+                                    orderedFallbacks.remove(at: index)
+                                    saveFallbacks()
+                                }) {
+                                    Image(systemName: "trash")
+                                        .foregroundColor(.red)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        
+                        if orderedFallbacks.isEmpty {
+                            Text("No fallback models selected")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .padding()
+                        }
+                    }
+                    .padding(.vertical, 5)
                 }
+                .frame(minHeight: 100, maxHeight: 250)
             }
         }
         .padding()
         .background(Color(NSColor.controlBackgroundColor))
         .cornerRadius(8)
     }
+
+    private func saveFallbacks() {
+        configManager.updateFallbackModels(orderedFallbacks)
+    }
+
+    private func modelPicker(selection: Binding<String>) -> some View {
+        Picker("", selection: selection) {
+            ForEach(availableModels, id: \.id) { model in
+                HStack {
+                    Image(systemName: model.isLocal ? "chip" : "cloud")
+                        .foregroundColor(model.isLocal ? .blue : .green)
+                    Text("\(model.displayName) (\(model.provider))")
+                        .foregroundColor(model.isKnown ? .primary : .secondary)
+                }
+                .tag(model.id)
+            }
+        }
+        .pickerStyle(.menu)
+    }
 }
 
 struct ActionButtonsView: View {
     @ObservedObject var configManager: ConfigManager
     @State private var isRestarting = false
+    @State private var isResetting = false
 
     var body: some View {
         HStack(spacing: 15) {
@@ -175,6 +219,19 @@ struct ActionButtonsView: View {
             }
             .buttonStyle(.bordered)
             .disabled(isRestarting)
+
+            Button(action: {
+                isResetting = true
+                _ = configManager.resetSessions()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                    isResetting = false
+                }
+            }) {
+                Label(isResetting ? "Resetting..." : "Reset Sessions", systemImage: "arrow.clockwise.counterclockwise")
+                    .frame(minWidth: 130)
+            }
+            .buttonStyle(.bordered)
+            .disabled(isResetting)
         }
         .padding()
     }
