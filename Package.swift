@@ -2,21 +2,21 @@
 import PackageDescription
 
 let package = Package(
-    name: "MoltbotManager",
+    name: "OpenClawManager",
     platforms: [
         .macOS(.v13)
     ],
     products: [
         .executable(
-            name: "MoltbotManager",
-            targets: ["MoltbotManager"]
+            name: "OpenClawManager",
+            targets: ["OpenClawManager"]
         )
     ],
     dependencies: [
     ],
     targets: [
         .executableTarget(
-            name: "MoltbotManager",
+            name: "OpenClawManager",
             dependencies: [],
             resources: [
                 .copy("Resources/AppIcon.appiconset"),
