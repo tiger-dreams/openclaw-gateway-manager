@@ -2,7 +2,7 @@
 
 A native macOS menu bar application for managing your **OpenClaw Gateway**.
 
-![App Icon](Sources/OpenClawManager/Resources/AppIcon.icns)
+![App Icon](app_icon.png)
 
 ## Features
 - **Gateway Status**: Real-time status indicator (Running/Stopped) for your local OpenClaw Gateway.
