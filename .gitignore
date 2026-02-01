@@ -1,0 +1,15 @@
+# Xcode
+.DS_Store
+*.xcodeproj
+*.xcworkspace
+DerivedData/
+
+# Build
+.build/
+*.swiftpm/
+
+# macOS
+.DS_Store
+
+# Temporary files
+*.tmp

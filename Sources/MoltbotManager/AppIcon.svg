@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="ocean-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#06B6D4;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0E7490;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="tentacle-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#22D3EE;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0891B2;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Main Body - Jellyfish Shape -->
+  <ellipse cx="512" cy="380" rx="300" ry="280" fill="url(#ocean-gradient)"/>
+
+  <!-- Inner Glow Effect -->
+  <ellipse cx="512" cy="400" rx="250" ry="220" fill="#22D3EE" opacity="0.3"/>
+
+  <!-- Tentacles - Top Layer -->
+  <g fill="url(#tentacle-gradient)" stroke="#0E7490" stroke-width="3">
+    <!-- Longest tentacles -->
+    <path d="M 512 100 Q 380 250 300 450 Q 290 480 310 500 Q 350 470 380 420 Q 450 300 512 150"/>
+    <path d="M 512 100 Q 650 250 720 450 Q 730 480 710 500 Q 670 470 640 420 Q 570 300 512 150"/>
+
+    <!-- Middle tentacles -->
+    <path d="M 410 110 Q 450 200 420 400 Q 415 430 430 450 Q 460 420 480 350 Q 480 250 460 180"/>
+    <path d="M 612 110 Q 570 200 600 400 Q 605 430 590 450 Q 560 420 540 350 Q 540 250 560 180"/>
+
+    <!-- Shorter outer tentacles -->
+    <path d="M 310 180 Q 350 300 320 480 Q 315 510 330 530 Q 360 500 380 420 Q 390 320 370 260"/>
+    <path d="M 712 180 Q 670 300 700 480 Q 705 510 690 530 Q 660 500 640 420 Q 630 320 650 260"/>
+    <path d="M 356 240 Q 390 340 370 500 Q 365 530 380 550 Q 410 520 425 450 Q 430 380 415 320"/>
+    <path d="M 668 240 Q 630 340 650 500 Q 655 530 640 550 Q 610 520 595 450 Q 590 380 605 320"/>
+  </g>
+
+  <!-- Mouth Area - Darker Center -->
+  <ellipse cx="512" cy="620" rx="100" ry="40" fill="#155E75" opacity="0.6"/>
+
+  <!-- Tentacle Details - Small bumps -->
+  <g fill="#22D3EE" opacity="0.5">
+    <circle cx="280" cy="460" r="8"/>
+    <circle cx="750" cy="460" r="8"/>
+    <circle cx="380" cy="440" r="6"/>
+    <circle cx="640" cy="440" r="6"/>
+    <circle cx="340" cy="510" r="5"/>
+    <circle cx="680" cy="510" r="5"/>
+  </g>
+
+  <!-- Eye-like spots on tentacles -->
+  <g fill="#E0F2FE">
+    <circle cx="425" cy="380" r="6"/>
+    <circle cx="595" cy="380" r="6"/>
+  </g>
+</svg>
