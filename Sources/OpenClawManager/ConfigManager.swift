@@ -7,6 +7,10 @@ class ConfigManager: ObservableObject {
     @Published var gatewayRunning: Bool = false
     @Published var errorMessage: String?
     @Published var configPath: String = ""
+    @Published var isActive: Bool = false
+
+    private var activityCheckTimer: Timer?
+    private var lastLogModification: Date?
 
     init() {
         // Try to find config automatically
@@ -78,17 +82,24 @@ class ConfigManager: ObservableObject {
         }
     }
 
-    func saveConfig() {
-        guard let config = config else { return }
-
+    private func modifyConfigJson(_ modification: (inout [String: Any]) -> Void) {
+        let url = URL(fileURLWithPath: configPath)
         do {
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = .prettyPrinted
-            let data = try encoder.encode(config)
-            try data.write(to: URL(fileURLWithPath: configPath))
-            errorMessage = nil
+            let data = try Data(contentsOf: url)
+            guard var json = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] else {
+                errorMessage = "Failed to parse config as JSON dictionary"
+                return
+            }
+            
+            modification(&json)
+            
+            let newData = try JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys])
+            try newData.write(to: url)
+            
+            // Reload to update UI
+            loadConfig()
         } catch {
-            errorMessage = "Failed to save config: \(error.localizedDescription)"
+            errorMessage = "Failed to modify config: \(error.localizedDescription)"
             print(error)
         }
     }
@@ -115,8 +126,7 @@ class ConfigManager: ObservableObject {
                     self.gatewayRunning = false
                     connection.cancel()
                 }
-            case .waiting(let error):
-                // Waiting means it can't connect immediately (e.g. refused)
+            case .waiting(_):
                 DispatchQueue.main.async {
                    self.gatewayRunning = false
                    connection.cancel()
@@ -145,14 +155,12 @@ class ConfigManager: ObservableObject {
         return true
     }
 
-
-
     func getAvailableModels() -> [ModelDisplay] {
         guard let config = config else { return [] }
 
         var models: [ModelDisplay] = []
 
-        // ADded models tracking to prevent duplicates
+        // Added models tracking to prevent duplicates
         var addedIds = Set<String>()
 
         // Add models from providers
@@ -210,16 +218,82 @@ class ConfigManager: ObservableObject {
     }
 
     func updatePrimaryModel(_ newModel: String) {
-        var mutableConfig = config
-        mutableConfig?.agents.defaults.model.primary = newModel
-        config = mutableConfig
-        saveConfig()
+        modifyConfigJson { json in
+            var agents = json["agents"] as? [String: Any] ?? [:]
+            var defaults = agents["defaults"] as? [String: Any] ?? [:]
+            var model = defaults["model"] as? [String: Any] ?? [:]
+            
+            model["primary"] = newModel
+            
+            defaults["model"] = model
+            agents["defaults"] = defaults
+            json["agents"] = agents
+        }
     }
 
     func updateFallbackModels(_ newFallbacks: [String]) {
-        var mutableConfig = config
-        mutableConfig?.agents.defaults.model.fallbacks = newFallbacks
-        config = mutableConfig
-        saveConfig()
+        modifyConfigJson { json in
+            var agents = json["agents"] as? [String: Any] ?? [:]
+            var defaults = agents["defaults"] as? [String: Any] ?? [:]
+            var model = defaults["model"] as? [String: Any] ?? [:]
+            
+            model["fallbacks"] = newFallbacks
+            
+            defaults["model"] = model
+            agents["defaults"] = defaults
+            json["agents"] = agents
+        }
+    }
+
+    // MARK: - Activity Monitoring
+    func startActivityMonitoring() {
+        // Check every 10 seconds
+        activityCheckTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { _ in
+            self.checkGatewayActivity()
+        }
+    }
+
+    func stopActivityMonitoring() {
+        activityCheckTimer?.invalidate()
+        activityCheckTimer = nil
+    }
+
+    private func checkGatewayActivity() {
+        guard gatewayRunning else {
+            self.isActive = false
+            return
+        }
+
+        // Find the latest log file in /tmp/openclaw/
+        let logDir = "/tmp/openclaw"
+        let fileManager = FileManager.default
+
+        guard fileManager.fileExists(atPath: logDir) else {
+            self.isActive = false
+            return
+        }
+
+        do {
+            let files = try fileManager.contentsOfDirectory(atPath: logDir)
+            let logFiles = files.filter { $0.hasPrefix("openclaw-") && $0.hasSuffix(".log") }
+
+            if let latestFile = logFiles.sorted().last {
+                let filePath = "\(logDir)/\(latestFile)"
+                let attributes = try fileManager.attributesOfItem(atPath: filePath)
+
+                if let modificationDate = attributes[.modificationDate] as? Date {
+                    // If log was modified in the last 10 seconds, consider it active
+                    let timeSinceModification = Date().timeIntervalSince(modificationDate)
+                    self.isActive = timeSinceModification < 10.0
+                } else {
+                    self.isActive = false
+                }
+            } else {
+                self.isActive = false
+            }
+        } catch {
+            print("Error checking log activity: \(error)")
+            self.isActive = false
+        }
     }
 }

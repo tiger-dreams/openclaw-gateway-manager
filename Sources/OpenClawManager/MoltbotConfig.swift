@@ -12,6 +12,7 @@ struct MoltbotConfig: Codable {
     let hooks: Hooks
     let channels: Channels
     let gateway: Gateway
+    let plugins: Plugins?
 
     struct Meta: Codable {
         let lastTouchedVersion: String
@@ -126,6 +127,8 @@ struct MoltbotConfig: Codable {
 
     struct Channels: Codable {
         let telegram: Telegram?
+        let discord: Discord?
+
         struct Telegram: Codable {
             let enabled: Bool
             let dmPolicy: String
@@ -133,6 +136,18 @@ struct MoltbotConfig: Codable {
             let allowFrom: [String]
             let groupPolicy: String
             let streamMode: String
+        }
+
+        struct Discord: Codable {
+            let enabled: Bool
+            let token: String
+            let groupPolicy: String
+            let dm: DM?
+
+            struct DM: Codable {
+                let policy: String
+                let allowFrom: [String]
+            }
         }
     }
 
@@ -149,6 +164,13 @@ struct MoltbotConfig: Codable {
         struct Tailscale: Codable {
             let mode: String
             let resetOnExit: Bool
+        }
+    }
+
+    struct Plugins: Codable {
+        let entries: [String: PluginEntry]?
+        struct PluginEntry: Codable {
+            let enabled: Bool
         }
     }
 }
