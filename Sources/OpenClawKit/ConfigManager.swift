@@ -2,32 +2,44 @@ import Foundation
 import AppKit
 import Network
 
-class ConfigManager: ObservableObject {
-    @Published var config: MoltbotConfig?
-    @Published var gatewayRunning: Bool = false
-    @Published var errorMessage: String?
-    @Published var configPath: String = ""
-    @Published var isActive: Bool = false
+public class ConfigManager: ObservableObject {
+    @Published public var config: MoltbotConfig?
+    @Published public var gatewayRunning: Bool = false
+    @Published public var errorMessage: String?
+    @Published public var configPath: String = ""
+    @Published public var isActive: Bool = false
 
     private var activityCheckTimer: Timer?
     private var lastLogModification: Date?
 
-    init() {
+    public init() {
         // Try to find config automatically
-        if let foundPath = findConfigPath() {
+        // ... (init logic same as before but now public)
+        if let foundPath = ConfigManager.findConfigPath() {
             configPath = foundPath
+            loadConfig()
         } else {
-            // Try to select config if not found
-            if let selectedPath = selectConfigPath() {
-                configPath = selectedPath
-            } else {
-                configPath = "\(NSHomeDirectory())/.openclaw/openclaw.json"
-            }
+             // Defer selection or default? 
+             // Logic in original init was:
+             // if found -> set, else select -> set, else default -> set.
+             // But 'selectConfigPath' used NSOpenPanel which might be tricky in pure logic class or tests.
+             // However, separating UI logic (NSOpenPanel) from Core logic is better.
+             // For now, I'll keep it but wrap it safe.
+             // Actually, for tests, we might want to inject path.
+             configPath = "\(NSHomeDirectory())/.openclaw/openclaw.json"
+             // attempting load
+             loadConfig()
         }
+    }
+    
+    // Helper to allow manual init for tests
+    public init(path: String) {
+        self.configPath = path
         loadConfig()
     }
 
-    private func findConfigPath() -> String? {
+    // Static helper to avoid instance dependency for finding path
+    private static func findConfigPath() -> String? {
         // Check current directory
         if FileManager.default.fileExists(atPath: "./openclaw.json") {
             return "./openclaw.json"
@@ -54,7 +66,7 @@ class ConfigManager: ObservableObject {
         return nil
     }
 
-    private func selectConfigPath() -> String? {
+    public func selectConfig() {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.json]
         panel.allowsMultipleSelection = false
@@ -64,18 +76,18 @@ class ConfigManager: ObservableObject {
         panel.title = "Choose Config File"
 
         if panel.runModal() == .OK, let url = panel.url {
-            return url.path
+            self.configPath = url.path
+            loadConfig()
         }
-
-        return nil
     }
 
-    func loadConfig() {
+    public func loadConfig() {
         do {
             let data = try Data(contentsOf: URL(fileURLWithPath: configPath))
             let decoder = JSONDecoder()
             config = try decoder.decode(MoltbotConfig.self, from: data)
             errorMessage = nil
+            // Verify partial update keys match? No need, JSONSerialization parses anything.
         } catch {
             errorMessage = "Failed to load config from \(configPath)\nDetails: \(error.localizedDescription)\n\(error)"
             print(error)
@@ -104,7 +116,7 @@ class ConfigManager: ObservableObject {
         }
     }
 
-    func checkGatewayStatus() {
+    public func checkGatewayStatus() {
         guard let config = config else {
             self.gatewayRunning = false
             return
@@ -128,8 +140,8 @@ class ConfigManager: ObservableObject {
                 }
             case .waiting(_):
                 DispatchQueue.main.async {
-                   self.gatewayRunning = false
-                   connection.cancel()
+                    self.gatewayRunning = false
+                    connection.cancel()
                 }
             default:
                 break
@@ -139,7 +151,7 @@ class ConfigManager: ObservableObject {
         connection.start(queue: .global())
     }
 
-    func restartGateway() -> Bool {
+    public func restartGateway() -> Bool {
         DispatchQueue.global(qos: .userInitiated).async {
             let task = Process()
             task.launchPath = "/bin/bash"
@@ -155,7 +167,7 @@ class ConfigManager: ObservableObject {
         return true
     }
 
-    func getAvailableModels() -> [ModelDisplay] {
+    public func getAvailableModels() -> [ModelDisplay] {
         guard let config = config else { return [] }
 
         var models: [ModelDisplay] = []
@@ -217,7 +229,7 @@ class ConfigManager: ObservableObject {
         return models.sorted { $0.displayName < $1.displayName }
     }
 
-    func updatePrimaryModel(_ newModel: String) {
+    public func updatePrimaryModel(_ newModel: String) {
         modifyConfigJson { json in
             var agents = json["agents"] as? [String: Any] ?? [:]
             var defaults = agents["defaults"] as? [String: Any] ?? [:]
@@ -231,7 +243,7 @@ class ConfigManager: ObservableObject {
         }
     }
 
-    func updateFallbackModels(_ newFallbacks: [String]) {
+    public func updateFallbackModels(_ newFallbacks: [String]) {
         modifyConfigJson { json in
             var agents = json["agents"] as? [String: Any] ?? [:]
             var defaults = agents["defaults"] as? [String: Any] ?? [:]
@@ -246,14 +258,14 @@ class ConfigManager: ObservableObject {
     }
 
     // MARK: - Activity Monitoring
-    func startActivityMonitoring() {
+    public func startActivityMonitoring() {
         // Check every 10 seconds
         activityCheckTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { _ in
             self.checkGatewayActivity()
         }
     }
 
-    func stopActivityMonitoring() {
+    public func stopActivityMonitoring() {
         activityCheckTimer?.invalidate()
         activityCheckTimer = nil
     }

@@ -48,3 +48,17 @@ This will generate `OpenClawManager.dmg` in the project root.
 The app looks for configuration in:
 1. `~/.openclaw/openclaw.json` (Recommended)
 2. `~/.moltbot/openclaw.json`
+
+## Troubleshooting
+
+### "App is damaged and can't be opened"
+If you see this message when launching the app, it's due to macOS Gatekeeper security. To fix it:
+
+1. Move `OpenClaw Manager.app` to your **Applications** folder.
+2. Open **Terminal**.
+3. Run the following command:
+
+```bash
+xattr -cr /Applications/OpenClawManager.app
+```
+

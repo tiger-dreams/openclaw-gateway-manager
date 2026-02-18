@@ -1,15 +1,23 @@
 import Foundation
 
-struct ModelDisplay {
-    let id: String
-    let displayName: String
-    let provider: String
-    let isLocal: Bool
-    let isKnown: Bool
+public struct ModelDisplay: Identifiable {
+    public let id: String
+    public let displayName: String
+    public let provider: String
+    public let isLocal: Bool
+    public let isKnown: Bool
+    
+    public init(id: String, displayName: String, provider: String, isLocal: Bool, isKnown: Bool) {
+        self.id = id
+        self.displayName = displayName
+        self.provider = provider
+        self.isLocal = isLocal
+        self.isKnown = isKnown
+    }
 }
 
-struct CloudModels: Codable {
-    static let knownProviders: [String: String] = [
+public struct CloudModels: Codable {
+    public static let knownProviders: [String: String] = [
         "anthropic": "Anthropic",
         "google-gemini-cli": "Google Gemini",
         "openai": "OpenAI",
@@ -18,13 +26,13 @@ struct CloudModels: Codable {
         "zai": "Z.ai"
     ]
 
-    static let knownAliases: [String: String] = [
+    public static let knownAliases: [String: String] = [
         "anthropic/claude-opus-4-5": "Opus",
         "anthropic/claude-sonnet-4-5": "Sonnet",
         "google-gemini-cli/gemini-3-pro-preview": "Flash"
     ]
 
-    static func getDisplayName(from modelId: String) -> String {
+    public static func getDisplayName(from modelId: String) -> String {
         // Known model ID to display name mapping
         let modelMap: [String: String] = [
             "gemini-3-pro-preview": "Gemini 3.0 Pro",
@@ -43,8 +51,8 @@ struct CloudModels: Codable {
     }
 }
 
-struct ModelAliases: Codable {
-    static let knownAliases: [String: String] = [
+public struct ModelAliases: Codable {
+    public static let knownAliases: [String: String] = [
         "anthropic/claude-opus-4-5": "Opus",
         "anthropic/claude-sonnet-4-5": "Sonnet",
         "google-gemini-cli/gemini-3-pro-preview": "Flash"

@@ -1,4 +1,5 @@
 import SwiftUI
+import OpenClawKit
 
 struct MenuBarIconView: View {
     @ObservedObject var configManager: ConfigManager

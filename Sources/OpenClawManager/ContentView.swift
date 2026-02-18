@@ -1,4 +1,5 @@
 import SwiftUI
+import OpenClawKit
 
 struct ContentView: View {
     @StateObject private var configManager = ConfigManager()
